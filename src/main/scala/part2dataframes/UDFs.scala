@@ -1,24 +1,24 @@
 package part2dataframes
 
-import org.apache.spark.sql.classic.SparkSession
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
 
+// User Defined Functions
 object UDFs {
-
   val spark = SparkSession.builder()
     .config("spark.master", "local")
     .getOrCreate()
 
   val moviesDF = spark.read.json("src/main/resources/data/movies.json")
 
-  // 1 - create a Scala function
+  // 1 - create scala funciton
   val countWords = (text: String) =>
-    text.split("\\s+").length
+    text.split("\\s").length // split by space
 
   // 2 - register the UDF
   val countWordsUDF = udf(countWords)
 
-  // 3 - use the UDF as a normal Spark function
+  // 3 - use the UDF as a normal spark function
   val moviesWithWordCountDF = moviesDF.select(
     col("Title"),
     countWordsUDF(col("Title")).as("Title_Words")
@@ -41,27 +41,26 @@ object UDFs {
     col("Name"),
     col("Weight_in_lbs"),
     col("Cylinders"),
-    carCategoryUDF(col("Weight_in_lbs"),col("Cylinders")).as("Category")
+    carCategoryUDF(col("Weight_in_lbs"), col("Cylinders")).as("Category")
   )
 
   /**
-    * Exercise - register a UDF that takes the brand of the cars from their name (first word), capitalize it.
-    * Then show all the distinct brands ordered alphabetically.
-    */
+   * Exercise - register UDF that takes the brand of the cars (first word of name), capatalize it,
+   * then show all distinct brands ordered alphabetically
+   * @param args
+   */
 
-  // 1
-  val extractBrandFn = (name: String) =>
-    name.split(" ")(0).capitalize
+  val brandFn = (title: String) =>
+    title.split(" ")(0).capitalize
 
-  // 2
-  val extractBrandUDF = udf(extractBrandFn)
+  val brandUDF = udf(brandFn)
 
-  // 3
-  val brandsDF = carsDF.select(extractBrandUDF(col("Name")).alias("Brand"))
-    .distinct()
+  val carBrandsDF = carsDF.select(
+    brandUDF(col("Name")).as("Brand")
+  ).distinct()
     .orderBy("Brand")
 
   def main(args: Array[String]): Unit = {
-    brandsDF.show()
+    carBrandsDF.show
   }
 }

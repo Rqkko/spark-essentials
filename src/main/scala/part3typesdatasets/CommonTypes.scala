@@ -2,21 +2,17 @@ package part3typesdatasets
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types.FloatType
+import org.apache.spark.types.variant.VariantSchema.FloatType
 
 object CommonTypes {
-
   val spark = SparkSession.builder()
     .appName("Common Spark Types")
-    .config("spark.master", "local")
+    .master("local")
     .getOrCreate()
 
+  val moviesDF = spark.read.json("src/main/resources/data/movies.json")
+
   def main(args: Array[String]): Unit = {
-
-    val moviesDF = spark.read
-      .option("inferSchema", "true")
-      .json("src/main/resources/data/movies.json")
-
     // adding a plain value to a DF
     moviesDF.select(col("Title"), lit(47).as("plain_value"))
 
@@ -26,7 +22,6 @@ object CommonTypes {
     val preferredFilter = dramaFilter and goodRatingFilter
 
     moviesDF.select("Title").where(dramaFilter)
-    // + multiple ways of filtering
 
     val moviesWithGoodnessFlagsDF = moviesDF.select(col("Title"), preferredFilter.as("good_movie"))
     // filter on a boolean column
@@ -43,15 +38,11 @@ object CommonTypes {
     println(moviesDF.stat.corr("Rotten_Tomatoes_Rating", "IMDB_Rating") /* corr is an ACTION */)
 
     // Strings
+    val carsDF = spark.read.json("src/main/resources/data/cars.json")
 
-    val carsDF = spark.read
-      .option("inferSchema", "true")
-      .json("src/main/resources/data/cars.json")
+    // capitalization: initap, upper, lower
+    carsDF.select(initcap(col("Name"))) // initcap will capitalize every word
 
-    // capitalization: initcap, lower, upper
-    carsDF.select(initcap(col("Name")))
-
-    // contains
     carsDF.select("*").where(col("Name").contains("volkswagen"))
 
     // regex
@@ -59,7 +50,8 @@ object CommonTypes {
     val vwDF = carsDF.select(
       col("Name"),
       regexp_extract(col("Name"), regexString, 0).as("regex_extract")
-    ).where(col("regex_extract") =!= "").drop("regex_extract")
+    ).where(col("regex_extract") =!= "")
+      .drop("regex_extract")
 
     vwDF.select(
       col("Name"),
@@ -67,27 +59,27 @@ object CommonTypes {
     )
 
     /**
-      * Exercise
-      *
-      * Filter the cars DF by a list of car names obtained by an API call
-      * Versions:
-      *   - contains
-      *   - regexes
-      */
+     * Exercise
+     * Filter the cars DF by a list of car names obtained by an API call
+     */
 
-    def getCarNames: List[String] = List("Volkswagen", "Mercedes-Benz", "Ford")
+    def getCarNames: List[String] = List("vw","toyota")
+//    val carRegex = getCarNames.mkString("|") // My solution
+    var carRegex = getCarNames.map(_.toLowerCase()).mkString("|")
 
-    // version 1 - regex
-    val complexRegex = getCarNames.map(_.toLowerCase()).mkString("|") // volskwagen|mercedes-benz|ford
-    carsDF.select(
+    val apiCarsDF = carsDF.select(
       col("Name"),
-      regexp_extract(col("Name"), complexRegex, 0).as("regex_extract")
-    ).where(col("regex_extract") =!= "")
+      regexp_extract(col("Name"), carRegex, 0).as("regex_extract")
+    )
+      .where(col("regex_extract") =!= "")
       .drop("regex_extract")
 
-    // version 2 - contains
+    apiCarsDF.show
+
+    // version 2 - contains (More complex)
     val carNameFilters = getCarNames.map(_.toLowerCase()).map(name => col("Name").contains(name))
     val bigFilter = carNameFilters.fold(lit(false))((combinedFilter, newCarNameFilter) => combinedFilter or newCarNameFilter)
     carsDF.filter(bigFilter).show
   }
+
 }
